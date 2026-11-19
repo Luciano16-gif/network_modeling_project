@@ -1,2 +1,5 @@
 # Course material: kept local, not published (the repository is public)
 docs/class-material/
+
+# Python bytecode cache
+__pycache__/

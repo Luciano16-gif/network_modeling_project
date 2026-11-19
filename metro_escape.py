@@ -77,7 +77,13 @@ def parse_input(path: str) -> MetroInput:
         origin, destination, minutes, line = next(rows)
         tunnels.append(Tunnel(int(origin), int(destination), int(minutes), line))
 
-    mission = Mission(*(int(value) for value in next(rows)))
+    pierre_origin, amelie_origin, pierre_gate, amelie_gate = (int(value) for value in next(rows))
+    mission = Mission(
+        pierre_origin=pierre_origin,
+        amelie_origin=amelie_origin,
+        pierre_gate=pierre_gate,
+        amelie_gate=amelie_gate,
+    )
 
     modifiers = [parse_modifier(row) for row in rows]   # whatever is left
 
