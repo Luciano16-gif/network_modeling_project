@@ -62,17 +62,17 @@ Any hand-written input is effectively instant. The spec's example header has 15 
 - **Transfers:** first boarding and staying on the same line cost nothing. Changing line costs the station's full transfer time, and the traveler occupies the station throughout.
 - **Station collision:** the two travelers may never be at the same station at the same integer minute. This includes arriving, departing, transferring, and waiting.
 - **Tunnel / same-train collision:** a tunnel is identified by the two stations it joins (either direction) plus its line. The travelers may not use the same tunnel during the same minute. That covers both opposite directions and the same train.
-- **Arrival:** Pierre ends at the first bunker station in the mission line, Amélie at the second. Neither may reach their gate before the other. The departure offset for the report is read directly from the plan.
+- **Arrival:** Pierre ends at the first bunker gate in the mission line (D1), Amélie at the second (D2). The two gates are different stations (section 5b). Neither may reach their gate before the other. The departure offset for the report is read directly from the plan.
 - **No solution:** the report prints a short Spanish message saying so.
 
-## 4. File formats (Decided, except modifiers)
+## 4. File formats (Decided)
 
 - `input.txt` follows the example in the spec exactly: counts, stations with transfer times, tunnels, mission line. The `#` lines are comments.
 - `output.txt` follows the example in the spec exactly, in Spanish.
 
-## 5. Line modifiers (Decided: our own syntax, to be proposed to the professor)
+## 5. Line modifiers (Decided: our own syntax, requested by the professor)
 
-The spec says the input may declare lines that forbid transfers at certain times and lines whose travel time is doubled, but the example input has no syntax for them. We defined our own syntax. The Spanish proposal for the professor is [`propuesta-modificadores.md`](propuesta-modificadores.md). If she prefers another syntax, only the modifier parsing function changes.
+The spec says the input may declare lines that forbid transfers at certain times and lines whose travel time is doubled, but the example input has no syntax for them. We defined our own syntax, and the professor asked us to send it to him so he can use it. The Spanish proposal is [`propuesta-modificadores.md`](propuesta-modificadores.md). If the syntax ever changes, only the modifier parsing function changes.
 
 Syntax: an optional section after the mission line, one modifier per line.
 
@@ -84,17 +84,23 @@ TIEMPO_DOBLE L9
 ```
 
 - `SIN_TRANSBORDO <line> [start end]`: during the window, nobody may **start** a transfer onto or off that line, at any station. Its trains keep running: riding straight through and boarding it at your origin are allowed. A traveler on the line during the window must keep riding that line, in either direction, because they can neither change lines nor wait mid-route.
-- `TIEMPO_DOBLE <line> [start end]`: a train of that line boarded during the window takes twice its listed time. Always ×2. Overlapping windows do not stack.
+- `TIEMPO_DOBLE <line> [start end]`: every tunnel of that line entered during the window takes twice its listed time. It is decided per tunnel, at the minute the traveler enters it, so a traveler already on the train when the window opens rides their next tunnels at double time. Always ×2. Overlapping windows do not stack.
 - Times are minutes from the start of the operation. The window includes the start minute and excludes the end minute (`10 30` = minutes 10–29). No window means the modifier is active for the whole operation.
 - The section is optional, so a file in the spec's exact format still works.
-- In the code, the search only asks two questions: "may this transfer start at minute t?" and "how long does this tunnel take if boarded at minute t?". The syntax never reaches the search.
+- In the code, the search only asks two questions: "may this transfer start at minute t?" and "how long does this tunnel take if entered at minute t?". The syntax never reaches the search.
+- Not supported: a line that stops running completely. "Clausurada" is read as "no transfers", which is what the spec's sentence describes.
 
-Still to ask the professor: whether she accepts this syntax, and whether "clausurada" could also mean a fully stopped line. That would be a third keyword, `LINEA_CERRADA`, where riders are let off at the next station.
+## 5b. Bunker gates (Decided)
 
-## 5b. Bunker gates (Decided, confirm with the professor)
+The prose describes one bunker with two gates, D1 for Pierre and D2 for Amélie. In the graph the bunker is **two nodes, one per gate**, which is what the spec's examples show:
 
-The prose describes one bunker station with two gates, but the example mission line (`1 12 7 8`) has two station IDs. We follow the example: Pierre ends at the first one and Amélie at the second.
+- The mission line `1 12 7 8` gives two gate IDs (`Destino_Búnker_P`, `Destino_Búnker_A`).
+- The example output ends with Pierre at `Estación 7 (Destino Compuerta D1)` and Amélie at `Estación 8 (Destino Compuerta D2)`, both at minute 28.
+
+The professor confirmed that a node cannot have two entrances, so each gate is its own station. Arriving together therefore never breaks the station-collision rule. A mission line with the same gate twice is invalid input.
 
 ## 6. Code layout (Decided)
 
 One Python source file (the submission is exactly three files: program, `input.txt`, `output.txt`). Expected size is roughly 400–700 lines. It is organized top-down in clear sections: data types, parsing, graph, search, report, `main`.
+
+The search hands its result to the report as a `Plan` (one `Route` of `Stop`s per traveler). The contract and the remaining work are in [`roadmap.md`](roadmap.md).
