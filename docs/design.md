@@ -59,7 +59,7 @@ Any hand-written input is effectively instant. The spec's example header has 15 
 ## 3. Rules the search enforces (Decided)
 
 - **Waiting:** a traveler may wait only at their own origin, before departing. At least one traveler departs at minute 0. Waiting counts as being at that station.
-- **Transfers:** first boarding and staying on the same line cost nothing. Changing line costs the station's full transfer time, and the traveler occupies the station throughout.
+- **Transfers:** first boarding and staying on the same line cost nothing. Changing line costs the station's full transfer time, and the traveler occupies the station throughout. After a transfer the traveler must board a train of the new line: changing back and forth would be waiting mid-route in disguise. A transfer time of 0 makes the change instant.
 - **Station collision:** the two travelers may never be at the same station at the same integer minute. This includes arriving, departing, transferring, and waiting.
 - **Tunnel / same-train collision:** a tunnel is identified by the two stations it joins (either direction) plus its line. The travelers may not use the same tunnel during the same minute. That covers both opposite directions and the same train.
 - **Arrival:** Pierre ends at the first bunker gate in the mission line (D1), Amélie at the second (D2). The two gates are different stations (section 5b). Neither may reach their gate before the other. The departure offset for the report is read directly from the plan.

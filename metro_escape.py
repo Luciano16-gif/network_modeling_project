@@ -4,6 +4,7 @@ Reads the metro network and mission from input.txt and writes the escape plan to
 See docs/enunciado-proyecto.md for the assignment and docs/design.md for the design decisions.
 """
 
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -160,11 +161,181 @@ Graph = dict[int, list[Tunnel]]   # station id -> tunnels leaving that station
 
 
 def build_graph(metro: MetroInput) -> Graph:
-    """Store the metro as an adjacency list (see docs/design.md, section 1).
+    """Store the metro as an adjacency list (see docs/design.md, section 1)."""
+    graph = {station: [] for station in metro.transfer_times}
+    for tunnel in metro.tunnels:
+        graph[tunnel.origin].append(tunnel)
+    return graph
 
-    TODO (half A): not implemented yet; see docs/roadmap.md.
-    """
-    raise NotImplementedError
+
+# ---------------------------------------------------------------------------
+# Search: where one traveler can be at a given minute
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Waiting:
+    """At their origin, not departed yet."""
+
+    station: int
+
+
+@dataclass(frozen=True)
+class AtStation:
+    """At a station on a line, about to leave it (nobody waits mid-route)."""
+
+    station: int
+    line: str
+    may_transfer: bool   # False right after a transfer: changing back and forth would be waiting in disguise
+
+
+@dataclass(frozen=True)
+class Transferring:
+    """Changing to another line inside a station."""
+
+    station: int
+    line: str            # the line being transferred to
+    minutes_left: int
+
+
+@dataclass(frozen=True)
+class Riding:
+    """Inside a tunnel, between two stations."""
+
+    tunnel: Tunnel
+    minutes_left: int
+
+
+@dataclass(frozen=True)
+class Arrived:
+    """At their own bunker gate. The route is over."""
+
+    station: int
+
+
+TravelerState = Waiting | AtStation | Transferring | Riding | Arrived
+
+
+def station_of(state: TravelerState) -> int | None:
+    """Return the station the traveler occupies, or None while inside a tunnel."""
+    if isinstance(state, Riding):
+        return None
+    return state.station
+
+
+# ---------------------------------------------------------------------------
+# Search: line modifiers (the only place that reads them)
+# ---------------------------------------------------------------------------
+
+def transfer_allowed(modifiers: tuple[Modifier, ...], from_line: str, to_line: str, minute: int) -> bool:
+    """Whether a transfer between the two lines may start at this minute (SIN_TRANSBORDO)."""
+    return not any(
+        modifier.kind == "SIN_TRANSBORDO"
+        and modifier.line in (from_line, to_line)
+        and modifier.is_active(minute)
+        for modifier in modifiers
+    )
+
+
+def tunnel_minutes(modifiers: tuple[Modifier, ...], tunnel: Tunnel, minute: int) -> int:
+    """How long the tunnel takes when entered at this minute (TIEMPO_DOBLE doubles it)."""
+    doubled = any(
+        modifier.kind == "TIEMPO_DOBLE"
+        and modifier.line == tunnel.line
+        and modifier.is_active(minute)
+        for modifier in modifiers
+    )
+    return tunnel.minutes * 2 if doubled else tunnel.minutes
+
+
+def last_modifier_minute(modifiers: tuple[Modifier, ...]) -> int:
+    """From this minute on no modifier window opens or closes, so time no longer changes the rules."""
+    return max((modifier.end for modifier in modifiers if modifier.end is not None), default=0)
+
+
+# ---------------------------------------------------------------------------
+# Search: what one traveler can do during one minute
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Move:
+    """One traveler's next minute: where they end up, the tunnel they use, and the report lines it produces."""
+
+    state: TravelerState
+    tunnel: Tunnel | None = None
+    stops: tuple[Stop, ...] = ()
+
+
+def traveler_moves(
+    state: TravelerState, minute: int, gate: int, metro: MetroInput, graph: Graph
+) -> list[Move]:
+    """Return every move one traveler can make during the minute that starts at `minute`."""
+    if isinstance(state, Waiting):
+        return origin_moves(state, minute, gate, metro, graph)
+    if isinstance(state, AtStation):
+        return station_moves(state, minute, gate, metro, graph)
+    if isinstance(state, Transferring):
+        return [transfer_progress(state.station, state.line, state.minutes_left - 1, minute + 1)]
+    if isinstance(state, Riding):
+        return [ride_progress(state.tunnel, state.minutes_left - 1, minute + 1, gate)]
+    return []   # Arrived: nothing more to do
+
+
+def origin_moves(state: Waiting, minute: int, gate: int, metro: MetroInput, graph: Graph) -> list[Move]:
+    """Keep waiting, or board any train leaving the origin (boarding first is never a transfer)."""
+    departure = Stop(minute, state.station, "origin", None)
+    moves = [Move(state)]
+    for tunnel in graph[state.station]:
+        moves.append(board(tunnel, minute, gate, metro, stops=(departure,)))
+    return moves
+
+
+def station_moves(state: AtStation, minute: int, gate: int, metro: MetroInput, graph: Graph) -> list[Move]:
+    """Stay on the same line, or change line paying the station's transfer time."""
+    transfer_time = metro.transfer_times[state.station]
+    moves = []
+    for tunnel in graph[state.station]:
+        if tunnel.line == state.line:
+            moves.append(board(tunnel, minute, gate, metro))
+        elif (
+            state.may_transfer
+            and transfer_time == 0
+            and transfer_allowed(metro.modifiers, state.line, tunnel.line, minute)
+        ):
+            instant_transfer = Stop(minute, state.station, "transfer", tunnel.line)
+            moves.append(board(tunnel, minute, gate, metro, stops=(instant_transfer,)))
+
+    if state.may_transfer and transfer_time > 0:
+        other_lines = dict.fromkeys(tunnel.line for tunnel in graph[state.station] if tunnel.line != state.line)
+        for line in other_lines:
+            if transfer_allowed(metro.modifiers, state.line, line, minute):
+                moves.append(transfer_progress(state.station, line, transfer_time - 1, minute + 1))
+    return moves
+
+
+def board(tunnel: Tunnel, minute: int, gate: int, metro: MetroInput, stops: tuple[Stop, ...] = ()) -> Move:
+    """Enter a tunnel at this minute."""
+    minutes_left = tunnel_minutes(metro.modifiers, tunnel, minute) - 1
+    return ride_progress(tunnel, minutes_left, minute + 1, gate, stops)
+
+
+def ride_progress(
+    tunnel: Tunnel, minutes_left: int, end_minute: int, gate: int, stops: tuple[Stop, ...] = ()
+) -> Move:
+    """Spend one more minute in the tunnel; arrive at its far end when no minutes are left."""
+    if minutes_left > 0:
+        return Move(Riding(tunnel, minutes_left), tunnel, stops)
+    station = tunnel.destination
+    if station == gate:
+        return Move(Arrived(station), tunnel, stops + (Stop(end_minute, station, "gate", tunnel.line),))
+    arrival = Stop(end_minute, station, "ride", tunnel.line)
+    return Move(AtStation(station, tunnel.line, may_transfer=True), tunnel, stops + (arrival,))
+
+
+def transfer_progress(station: int, line: str, minutes_left: int, end_minute: int) -> Move:
+    """Spend one more minute transferring; stand on the new line when no minutes are left."""
+    if minutes_left > 0:
+        return Move(Transferring(station, line, minutes_left))
+    return Move(AtStation(station, line, may_transfer=False), stops=(Stop(end_minute, station, "transfer", line),))
 
 
 # ---------------------------------------------------------------------------
@@ -174,9 +345,74 @@ def build_graph(metro: MetroInput) -> Graph:
 def find_plan(metro: MetroInput, graph: Graph) -> Plan | None:
     """Return the fastest collision-free plan, or None if no plan exists (see docs/design.md, sections 2-3).
 
-    TODO (half A): not implemented yet; see docs/roadmap.md.
+    Each node of the search is (Pierre's state, Amélie's state, minute), and each step is one minute.
+    Breadth-first order means the first node where both have arrived is the earliest possible arrival.
     """
-    raise NotImplementedError
+    mission = metro.mission
+    if mission.pierre_origin == mission.amelie_origin:
+        return None   # they would share a station at minute 0
+
+    horizon = last_modifier_minute(metro.modifiers)
+    start = (Waiting(mission.pierre_origin), Waiting(mission.amelie_origin), 0)
+    parents = {visit_key(start, horizon): None}
+    queue = deque([start])
+
+    while queue:
+        pierre, amelie, minute = node = queue.popleft()
+        pierre_moves = traveler_moves(pierre, minute, mission.pierre_gate, metro, graph)
+        amelie_moves = traveler_moves(amelie, minute, mission.amelie_gate, metro, graph)
+
+        for pierre_move in pierre_moves:
+            for amelie_move in amelie_moves:
+                if breaks_a_rule(pierre_move, amelie_move, minute):
+                    continue
+                next_node = (pierre_move.state, amelie_move.state, minute + 1)
+                next_key = visit_key(next_node, horizon)
+                if next_key in parents:
+                    continue
+                parents[next_key] = (visit_key(node, horizon), pierre_move.stops, amelie_move.stops)
+                if isinstance(pierre_move.state, Arrived) and isinstance(amelie_move.state, Arrived):
+                    return rebuild_plan(parents, next_key)
+                queue.append(next_node)
+
+    return None
+
+
+def visit_key(node: tuple, horizon: int) -> tuple:
+    """Identify a search node; after the last modifier window, the same pair of states at any minute counts once."""
+    pierre, amelie, minute = node
+    return (pierre, amelie, min(minute, horizon))
+
+
+def breaks_a_rule(pierre: Move, amelie: Move, minute: int) -> bool:
+    """Whether doing both moves in the same minute breaks a rule from docs/design.md, section 3."""
+    if minute == 0 and isinstance(pierre.state, Waiting) and isinstance(amelie.state, Waiting):
+        return True   # at least one of them departs at minute 0
+    if isinstance(pierre.state, Arrived) != isinstance(amelie.state, Arrived):
+        return True   # one would reach the bunker before the other
+    pierre_station = station_of(pierre.state)
+    if pierre_station is not None and pierre_station == station_of(amelie.state):
+        return True   # same station at the same minute
+    if pierre.tunnel and amelie.tunnel and tunnel_id(pierre.tunnel) == tunnel_id(amelie.tunnel):
+        return True   # same tunnel during the same minute, in either direction
+    return False
+
+
+def tunnel_id(tunnel: Tunnel) -> tuple[frozenset[int], str]:
+    """The same id for both directions of a tunnel on a line."""
+    return (frozenset((tunnel.origin, tunnel.destination)), tunnel.line)
+
+
+def rebuild_plan(parents: dict, key: tuple) -> Plan:
+    """Walk back from the final node to the start and collect each traveler's stops in order."""
+    steps = []
+    while parents[key] is not None:
+        key, pierre_stops, amelie_stops = parents[key]
+        steps.append((pierre_stops, amelie_stops))
+    steps.reverse()
+    pierre = Route(tuple(stop for pierre_stops, _ in steps for stop in pierre_stops))
+    amelie = Route(tuple(stop for _, amelie_stops in steps for stop in amelie_stops))
+    return Plan(pierre, amelie)
 
 
 # ---------------------------------------------------------------------------

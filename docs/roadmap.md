@@ -12,7 +12,8 @@ All in `metro_escape.py`:
 - **Plan data types:** `Stop`, `Route`, `Plan`. This is the contract between the two halves.
 - **Parser:** `parse_input` reads `input.txt`, including the optional modifier section.
 - **`main`:** the full pipeline, from reading the input through validating, building the graph, searching and writing the report.
-- **Stubs:** one empty function per remaining step, each marked `TODO (half A)` or `TODO (half B)`.
+- **Half A, the engine:** `build_graph` and `find_plan` are implemented, with each traveler's states and moves.
+- **Stubs:** one empty function per remaining half B step, each marked `TODO (half B)`.
 
 ## The contract: `Plan`
 
@@ -31,9 +32,9 @@ The search returns a `Plan`, or `None` when no plan exists. A `Plan` holds one `
 
 Do not change the contract unless both halves agree, since both depend on it.
 
-## Half A: the engine
+## Half A: the engine (done)
 
-Lives in the *Graph* and *Search* sections.
+Lives in the *Graph* and *Search* sections. Kept here as a description of how it works.
 
 ### A1. `build_graph` (adjacency list)
 
@@ -76,6 +77,7 @@ Raise `ValueError` with a Spanish message when:
 
 - a tunnel, origin or gate names a station that is not listed
 - Pierre's gate and Amélie's gate are the same station (the bunker is two nodes, one per gate)
+- a traveler's origin is their own gate (they would already be at the bunker at minute 0)
 - a station is listed twice
 - a travel time is zero or negative, or a transfer time is negative
 - a modifier has exactly one minute, a start that is not before its end, or a line that no tunnel uses
