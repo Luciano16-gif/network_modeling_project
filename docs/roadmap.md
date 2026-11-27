@@ -86,6 +86,7 @@ Also:
 
 - **A short file:** when the file has fewer lines than its counts promise, `parse_input` currently fails with a bare `StopIteration`. Turn that into a clear Spanish message.
 - **`main`:** catch `ValueError`, print the message, and stop without writing `output.txt`.
+- **Done when:** every test in `tests/test_validation.py` passes. They are skipped until `validate_input` stops raising `NotImplementedError`.
 
 ### B2. `format_report`
 
@@ -93,27 +94,33 @@ Also:
 - **The departure section:** for each traveler, print `* Pierre arranca en el minuto: N`. If N is above 0, append `(Debe esperar N minutos en su estación de origen)`.
 - **Travel time** in each route header is `arrival_minute - departure_minute`.
 - **When `plan` is `None`,** print a short Spanish message saying that no collision-free plan with a simultaneous arrival exists.
-- **Done when:** a `Plan` built by hand from the spec example produces exactly the lines the example shows.
+- **Done when:** every test in `tests/test_report.py` passes. They are skipped until `format_report` stops raising `NotImplementedError`. `test_spec_example` holds the exact expected text.
 
 ### B3. The final `input.txt`
 
 - **What it must show:** design the submitted input so the plan visibly includes at least one transfer, one collision the search had to avoid (a wait or a detour), and an effect from each modifier.
 - **Then:** generate `output.txt` from it.
-- **Timing:** this needs half A finished.
+- **Tests:** the tests with exact numbers use `tests/fixtures/sample_input.txt`, a frozen copy of the original input. Changing `input.txt` does not break them. The only test that reads `input.txt` checks that it has a plan following every rule.
 
-### B4. Laws as tests
+### B4. Tests (already in place)
 
-- **Where:** a `tests/` folder using only `unittest`. It is not part of the three submitted files.
-- **The plan checker:** given a network and a `Plan`, it checks every rule from `design.md`, section 3, independently of the search. For example: real tunnels with the right times (doubled where a modifier applies), transfer times, waiting only at the origin, no shared station or tunnel in the same minute, each traveler at their own gate, and the same arrival minute for both.
-- **The tests:**
-  - The real `input.txt` parses correctly.
-  - Each validation error is raised.
-  - `Modifier.is_active` holds at the edges of its window.
-  - The plan checker passes on `find_plan`'s output for many small random networks.
+The `tests/` folder uses only `unittest` and is not part of the three submitted files. Run it with `python -m unittest`.
+
+| File | What it covers |
+| --- | --- |
+| `tests/laws.py` | The plan checker and a brute force, written independently of the search |
+| `tests/test_engine.py` | Half A: every rule and optimality on 150 random networks |
+| `tests/test_parsing.py` | Parsing and modifier windows |
+| `tests/test_constraints.py` | Standard library only, one program file, the `Plan` contract |
+| `tests/test_validation.py` | Half B, step B1 (skipped until implemented) |
+| `tests/test_report.py` | Half B, step B2 (skipped until implemented) |
+
+Add tests for anything new. Never weaken the existing ones.
 
 ## Rules for everyone
 
 - **Run the program** with `python metro_escape.py`. It needs Python 3.10 or newer.
+- **Run the tests** with `python -m unittest` before every commit. GitHub runs them on every PR too.
 - **Stay in your own sections** of `metro_escape.py`, which keeps merges clean.
 - **One branch and one PR per step,** squash-merged into `main`.
 - **Do not:**

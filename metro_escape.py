@@ -151,6 +151,7 @@ def validate_input(metro: MetroInput) -> None:
 
     TODO (half B): not implemented yet; see docs/roadmap.md for the checks it must make.
     """
+    raise NotImplementedError
 
 
 # ---------------------------------------------------------------------------
