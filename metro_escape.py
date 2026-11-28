@@ -4,41 +4,63 @@ Reads the metro network and mission from input.txt and writes the escape plan to
 See docs/enunciado-proyecto.md for the assignment and docs/design.md for the design decisions.
 """
 
-from collections import deque
-from dataclasses import dataclass
-from pathlib import Path
+# No imports: the assignment allows only code written by the team, so everything here is plain Python.
+
+# input.txt and output.txt live in the same folder as this program, wherever it is run from.
+PROGRAM_FOLDER = __file__[: max(__file__.rfind("/"), __file__.rfind("\\")) + 1]
+INPUT_PATH = PROGRAM_FOLDER + "input.txt"
+OUTPUT_PATH = PROGRAM_FOLDER + "output.txt"
 
 
-INPUT_PATH = Path(__file__).with_name("input.txt")
-OUTPUT_PATH = Path(__file__).with_name("output.txt")
+# ---------------------------------------------------------------------------
+# Data types: base class
+# ---------------------------------------------------------------------------
+
+class Value:
+    """Base of every data type: compared by its fields, usable as a dict key, and never changed once built."""
+
+    def __setattr__(self, name: str, value) -> None:
+        if name in vars(self):
+            raise AttributeError(f"{type(self).__name__}.{name} cannot change once set")
+        super().__setattr__(name, value)
+
+    def __eq__(self, other) -> bool:
+        return type(self) is type(other) and vars(self) == vars(other)
+
+    def __hash__(self) -> int:
+        return hash((type(self), tuple(vars(self).values())))
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{name}={value!r}" for name, value in vars(self).items())
+        return f"{type(self).__name__}({fields})"
 
 
 # ---------------------------------------------------------------------------
 # Data types: input
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class Tunnel:
-    origin: int
-    destination: int
-    minutes: int
-    line: str
+class Tunnel(Value):
+    def __init__(self, origin: int, destination: int, minutes: int, line: str):
+        self.origin = origin
+        self.destination = destination
+        self.minutes = minutes
+        self.line = line
 
 
-@dataclass(frozen=True)
-class Mission:
-    pierre_origin: int
-    amelie_origin: int
-    pierre_gate: int
-    amelie_gate: int
+class Mission(Value):
+    def __init__(self, pierre_origin: int, amelie_origin: int, pierre_gate: int, amelie_gate: int):
+        self.pierre_origin = pierre_origin
+        self.amelie_origin = amelie_origin
+        self.pierre_gate = pierre_gate
+        self.amelie_gate = amelie_gate
 
 
-@dataclass(frozen=True)
-class Modifier:
-    kind: str            # "SIN_TRANSBORDO" or "TIEMPO_DOBLE"
-    line: str
-    start: int           # first minute it applies (inclusive)
-    end: int | None      # first minute it stops applying; None = whole operation
+class Modifier(Value):
+    def __init__(self, kind: str, line: str, start: int, end: int | None):
+        self.kind = kind     # "SIN_TRANSBORDO" or "TIEMPO_DOBLE"
+        self.line = line
+        self.start = start   # first minute it applies (inclusive)
+        self.end = end       # first minute it stops applying; None = whole operation
 
     def is_active(self, minute: int) -> bool:
         if self.end is None:
@@ -46,12 +68,18 @@ class Modifier:
         return self.start <= minute < self.end
 
 
-@dataclass(frozen=True)
-class MetroInput:
-    transfer_times: dict[int, int]   # station id -> transfer minutes
-    tunnels: tuple[Tunnel, ...]
-    mission: Mission
-    modifiers: tuple[Modifier, ...]
+class MetroInput(Value):
+    def __init__(
+        self,
+        transfer_times: dict[int, int],
+        tunnels: tuple[Tunnel, ...],
+        mission: Mission,
+        modifiers: tuple[Modifier, ...],
+    ):
+        self.transfer_times = transfer_times   # station id -> transfer minutes
+        self.tunnels = tunnels
+        self.mission = mission
+        self.modifiers = modifiers
 
 
 # ---------------------------------------------------------------------------
@@ -61,19 +89,19 @@ class MetroInput:
 STOP_EVENTS = ("origin", "ride", "transfer", "gate")
 
 
-@dataclass(frozen=True)
-class Stop:
+class Stop(Value):
     """One line of a traveler's route in the report."""
 
-    minute: int
-    station: int
-    event: str           # one of STOP_EVENTS
-    line: str | None     # line ridden or transferred to; None for "origin"
+    def __init__(self, minute: int, station: int, event: str, line: str | None):
+        self.minute = minute
+        self.station = station
+        self.event = event   # one of STOP_EVENTS
+        self.line = line     # line ridden or transferred to; None for "origin"
 
 
-@dataclass(frozen=True)
-class Route:
-    stops: tuple[Stop, ...]   # in time order: first "origin", last "gate"
+class Route(Value):
+    def __init__(self, stops: tuple[Stop, ...]):
+        self.stops = stops   # in time order: first "origin", last "gate"
 
     @property
     def departure_minute(self) -> int:
@@ -84,10 +112,10 @@ class Route:
         return self.stops[-1].minute
 
 
-@dataclass(frozen=True)
-class Plan:
-    pierre: Route
-    amelie: Route
+class Plan(Value):
+    def __init__(self, pierre: Route, amelie: Route):
+        self.pierre = pierre
+        self.amelie = amelie
 
     @property
     def total_minutes(self) -> int:
@@ -101,14 +129,14 @@ class Plan:
 MODIFIER_KINDS = ("SIN_TRANSBORDO", "TIEMPO_DOBLE")
 
 
-def read_data_rows(path: str | Path) -> list[list[str]]:
+def read_data_rows(path: str) -> list[list[str]]:
     """Return the file's meaningful lines split into words, skipping blanks and # comments."""
     with open(path, encoding="utf-8") as file:
         stripped = (line.strip() for line in file)
         return [line.split() for line in stripped if line and not line.startswith("#")]
 
 
-def parse_input(path: str | Path) -> MetroInput:
+def parse_input(path: str) -> MetroInput:
     rows = iter(read_data_rows(path))
 
     station_count, tunnel_count = (int(value) for value in next(rows))
@@ -173,44 +201,45 @@ def build_graph(metro: MetroInput) -> Graph:
 # Search: where one traveler can be at a given minute
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class Waiting:
+class Waiting(Value):
     """At their origin, not departed yet."""
 
-    station: int
+    def __init__(self, station: int):
+        self.station = station
 
 
-@dataclass(frozen=True)
-class AtStation:
+class AtStation(Value):
     """At a station on a line, about to leave it (nobody waits mid-route)."""
 
-    station: int
-    line: str
-    may_transfer: bool   # False right after a transfer: changing back and forth would be waiting in disguise
+    def __init__(self, station: int, line: str, may_transfer: bool):
+        self.station = station
+        self.line = line
+        # False right after a transfer: changing back and forth would be waiting in disguise.
+        self.may_transfer = may_transfer
 
 
-@dataclass(frozen=True)
-class Transferring:
+class Transferring(Value):
     """Changing to another line inside a station."""
 
-    station: int
-    line: str            # the line being transferred to
-    minutes_left: int
+    def __init__(self, station: int, line: str, minutes_left: int):
+        self.station = station
+        self.line = line   # the line being transferred to
+        self.minutes_left = minutes_left
 
 
-@dataclass(frozen=True)
-class Riding:
+class Riding(Value):
     """Inside a tunnel, between two stations."""
 
-    tunnel: Tunnel
-    minutes_left: int
+    def __init__(self, tunnel: Tunnel, minutes_left: int):
+        self.tunnel = tunnel
+        self.minutes_left = minutes_left
 
 
-@dataclass(frozen=True)
-class Arrived:
+class Arrived(Value):
     """At their own bunker gate. The route is over."""
 
-    station: int
+    def __init__(self, station: int):
+        self.station = station
 
 
 TravelerState = Waiting | AtStation | Transferring | Riding | Arrived
@@ -257,13 +286,13 @@ def last_modifier_minute(modifiers: tuple[Modifier, ...]) -> int:
 # Search: what one traveler can do during one minute
 # ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class Move:
+class Move(Value):
     """One traveler's next minute: where they end up, the tunnel they use, and the report lines it produces."""
 
-    state: TravelerState
-    tunnel: Tunnel | None = None
-    stops: tuple[Stop, ...] = ()
+    def __init__(self, state: TravelerState, tunnel: Tunnel | None = None, stops: tuple[Stop, ...] = ()):
+        self.state = state
+        self.tunnel = tunnel
+        self.stops = stops
 
 
 def traveler_moves(
@@ -356,10 +385,12 @@ def find_plan(metro: MetroInput, graph: Graph) -> Plan | None:
     horizon = last_modifier_minute(metro.modifiers)
     start = (Waiting(mission.pierre_origin), Waiting(mission.amelie_origin), 0)
     parents = {visit_key(start, horizon): None}
-    queue = deque([start])
+    queue = [start]
+    next_in_line = 0   # nodes before this index are already explored; reading by index keeps it a FIFO queue
 
-    while queue:
-        pierre, amelie, minute = node = queue.popleft()
+    while next_in_line < len(queue):
+        pierre, amelie, minute = node = queue[next_in_line]
+        next_in_line += 1
         pierre_moves = traveler_moves(pierre, minute, mission.pierre_gate, metro, graph)
         amelie_moves = traveler_moves(amelie, minute, mission.amelie_gate, metro, graph)
 

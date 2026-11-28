@@ -12,7 +12,7 @@ This repository is a university project: *El Escape de los Coleccionistas en el 
 
 ## Hard constraints from the assignment
 
-- Python, standard library only. No third-party packages.
+- Python, no third-party libraries. To stay clear of any doubt, `metro_escape.py` imports nothing at all, not even the standard library.
 - The submission is exactly three files: the source program, `input.txt`, and `output.txt`.
 - The graph must be stored using one of the representations taught in class, and the team must be able to justify that choice at the defense.
 - The team will be questioned on the purpose of every method, so code must be small, explicit, and easy to explain.
@@ -29,10 +29,10 @@ This repository is a university project: *El Escape de los Coleccionistas en el 
 3. **Never delete, skip or weaken a test, and never change an expected value, to make it pass.** Fix the code instead. You may add new tests.
 4. **If a half A test fails after your change, your change is wrong.** Undo it. Do not edit the search to make it pass.
 5. **The skipped tests are the acceptance criteria for half B.** The tests in `tests/test_validation.py` and `tests/test_report.py` turn on by themselves once `validate_input` and `format_report` stop raising `NotImplementedError`.
-6. **Keep the hard constraints:** standard library only, and one program file. `tests/test_constraints.py` checks both.
+6. **Keep the hard constraints:** no imports in `metro_escape.py`, and one program file. `tests/test_constraints.py` checks both.
 7. **Keep changes small.** Do not:
    - add new `.py` files at the root
-   - add dependencies
+   - add imports or dependencies
    - leave debugging prints
    - reformat or rename code you were not asked to change
 8. **When unsure, stop and ask the user.** Do not guess.
@@ -48,7 +48,7 @@ This repository is a university project: *El Escape de los Coleccionistas en el 
 Follow the style already in `metro_escape.py`:
 
 - **One file,** organized top-down in the sections listed in `docs/design.md`, section 6. New code goes in its section, not at the end of the file.
-- **Data:** immutable `@dataclass(frozen=True)` types and tuples. Values that can be derived, such as a route's arrival minute, are `@property`s, not stored fields.
+- **Data:** classes that inherit from `Value` (compared by their fields, unchangeable once built) with an explicit `__init__`, and tuples. Values that can be derived, such as a route's arrival minute, are `@property`s, not stored fields.
 - **Functions:** small, with type hints. Give a function a docstring when its name alone does not say what it returns.
 - **Constants and globals:** fixed values are module-level constants in capitals, like `MODIFIER_KINDS`. There is no other global state.
 - **Errors:** invalid input raises `ValueError` with a Spanish message. Do not catch errors only to hide them.
