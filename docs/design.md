@@ -27,11 +27,14 @@ Why not the other four representations taught in class:
 The professor asked for **Dijkstra** (Unit 3). It runs on a state graph generated as the search goes, while the metro itself stays in the adjacency list:
 
 - **Node:** where **both** travelers are at once (waiting at their origin, at a station on a line, transferring, or partway through a tunnel), plus the minute while a modifier window can still open or close.
-- **Edge (a "leg"):** both travelers move together until one of them has a choice again: a traveler at a station or waiting at their origin chooses, one inside a tunnel or mid-transfer just keeps going. Every combination of the two travelers' choices is a separate edge. The rules of section 3 are checked minute by minute along the leg, and a leg that breaks one is discarded.
+- **Edge (a "leg"):** both travelers make a first move, then keep going while both are inside a tunnel or mid-transfer (those states have only one move). The leg ends as soon as one of them is at a station, waiting at their origin, or at their gate. Every combination of the two travelers' choices is a separate edge. The rules of section 3 are checked minute by minute along the leg, and a leg that breaks one is discarded.
 - **Weight:** the minutes the leg lasts. A node's distance is the minute both travelers reach it.
-- **Dijkstra, as in `Unit_3/Dijkstra_Dirigido.xlsx`:** a table of distance, predecessor and visited. Each round visits the unvisited node with the smallest distance and updates its neighbors. The first visited node where both have arrived is the optimal plan, and both routes are rebuilt from the predecessors.
+- **Dijkstra, as in `class-material/Unidad_3/Dijkstra_Dirigido.xlsx`:** a table of distance, predecessor and visited. Each round visits the unvisited node with the smallest distance and updates its neighbors (`distance[node] + leg minutes`). The first visited node where both have arrived is the optimal plan, and both routes are rebuilt from the predecessors.
 
-Nodes are discovered as the search goes instead of listed up front with infinite distance, because the state graph is too big to build in advance.
+Two practical differences from the spreadsheet, neither of which changes the algorithm:
+
+- Nodes are discovered as the search goes instead of listed up front with infinite distance, because the state graph is too big to build in advance.
+- Distances are whole minutes, so the unvisited nodes are kept in one list per minute. The one with the smallest distance is always in the lowest minute's list, so the search never scans every unvisited node to find it. Scanning made the search quadratic: a 15-station input with no plan went from minutes to under 30 seconds.
 
 ### Why not plan one traveler, then the other?
 
@@ -49,7 +52,7 @@ In the benchmark below, planning one traveler at a time found no plan on 11–29
 
 Conflict-Based Search (the professional standard for multi-agent routing) was considered and rejected. It targets many agents on large maps, the simultaneous-arrival rule complicates it, it can blow up when the routes cross a lot, and it was not taught.
 
-### Benchmark (throwaway Python prototype of the earlier minute-by-minute search, random metro-like networks)
+### Benchmark (throwaway prototype of the earlier minute-by-minute search, random metro-like networks)
 
 | Stations (tunnels) | Typical | Slowest observed | Proving no solution exists | Peak memory |
 | --- | --- | --- | --- | --- |
@@ -59,7 +62,7 @@ Conflict-Based Search (the professional standard for multi-agent routing) was co
 | 200 | 3 s | 5 s | 9 s | ~400 MB |
 | 300 (~680) | 3 s | 24 s | not measured | ~900 MB |
 
-Any hand-written input is effectively instant. The spec's example header has 15 stations and 22 tunnels.
+The current program is slower than this prototype (roughly 1.5–3×) because its data types are plain classes instead of tuples. Inputs with a plan, like the spec's example (15 stations, 22 tunnels), still take a fraction of a second. The slow case is proving that **no** plan exists when modifier windows end late: every minute until the last window ends multiplies the nodes, and one such 15-station input takes about 30 seconds. Keep the submitted `input.txt` solvable.
 
 ## 3. Rules the search enforces (Decided)
 

@@ -369,109 +369,11 @@ def transfer_progress(station: int, line: str, minutes_left: int, end_minute: in
 
 
 # ---------------------------------------------------------------------------
-# Search: one edge of the search graph (both travelers, until one must decide)
+# Search: the rules both travelers must follow together
 # ---------------------------------------------------------------------------
-
-class Leg(Value):
-    """Both travelers move together until one of them has a choice again; its weight is the minutes it lasts."""
-
-    def __init__(
-        self,
-        pierre: TravelerState,
-        amelie: TravelerState,
-        end_minute: int,
-        pierre_stops: tuple[Stop, ...],
-        amelie_stops: tuple[Stop, ...],
-    ):
-        self.pierre = pierre
-        self.amelie = amelie
-        self.end_minute = end_minute
-        self.pierre_stops = pierre_stops
-        self.amelie_stops = amelie_stops
-
-
-def is_forced(state: TravelerState) -> bool:
-    """Inside a tunnel or mid-transfer, a traveler has exactly one move: keep going."""
-    return isinstance(state, (Riding, Transferring))
-
-
-def joint_legs(pierre: TravelerState, amelie: TravelerState, minute: int, metro: MetroInput, graph: Graph) -> list[Leg]:
-    """Return every edge leaving the search node: each pair of first moves, followed until someone must decide."""
-    mission = metro.mission
-    legs = []
-    for pierre_move in traveler_moves(pierre, minute, mission.pierre_gate, metro, graph):
-        for amelie_move in traveler_moves(amelie, minute, mission.amelie_gate, metro, graph):
-            leg = follow_leg(pierre_move, amelie_move, minute, metro, graph)
-            if leg is not None:
-                legs.append(leg)
-    return legs
-
-
-def follow_leg(pierre_move: Move, amelie_move: Move, minute: int, metro: MetroInput, graph: Graph) -> Leg | None:
-    """Play the leg minute by minute while both are forced; return None if any minute breaks a rule."""
-    mission = metro.mission
-    pierre_stops, amelie_stops = (), ()
-    while True:
-        if breaks_a_rule(pierre_move, amelie_move, minute):
-            return None
-        pierre_stops += pierre_move.stops
-        amelie_stops += amelie_move.stops
-        minute += 1
-        if not (is_forced(pierre_move.state) and is_forced(amelie_move.state)):
-            return Leg(pierre_move.state, amelie_move.state, minute, pierre_stops, amelie_stops)
-        # Both are forced, so each has exactly one move this minute.
-        pierre_move = traveler_moves(pierre_move.state, minute, mission.pierre_gate, metro, graph)[0]
-        amelie_move = traveler_moves(amelie_move.state, minute, mission.amelie_gate, metro, graph)[0]
-
-
-# ---------------------------------------------------------------------------
-# Search: Dijkstra over both travelers
-# ---------------------------------------------------------------------------
-
-def find_plan(metro: MetroInput, graph: Graph) -> Plan | None:
-    """Return the fastest collision-free plan, or None if no plan exists (see docs/design.md, sections 2-3).
-
-    Dijkstra as taught in class, on a graph whose nodes are (Pierre's state, Amélie's state, minute) and whose
-    edges are legs weighted by their minutes. A node's distance is the minute both travelers reach it.
-    """
-    mission = metro.mission
-    if mission.pierre_origin == mission.amelie_origin:
-        return None   # they would share a station at minute 0
-
-    horizon = last_modifier_minute(metro.modifiers)
-    start = search_node(Waiting(mission.pierre_origin), Waiting(mission.amelie_origin), 0, horizon)
-    distance = {start: 0}          # node -> smallest known minute to reach it
-    predecessor = {start: None}    # node -> (previous node, Pierre's stops, Amélie's stops) on that best way
-    visited = set()
-    unvisited = {start: 0}         # node -> distance, for nodes found but not visited yet (kept in a fixed order)
-
-    while unvisited:
-        node, minute = min(unvisited.items(), key=lambda entry: entry[1])   # smallest known distance
-        del unvisited[node]
-        visited.add(node)
-        pierre, amelie, _ = node
-        if isinstance(pierre, Arrived):   # the rules only let both arrive together
-            return rebuild_plan(predecessor, node)
-
-        for leg in joint_legs(pierre, amelie, minute, metro, graph):
-            neighbor = search_node(leg.pierre, leg.amelie, leg.end_minute, horizon)
-            if neighbor in visited:
-                continue
-            if neighbor not in distance or leg.end_minute < distance[neighbor]:
-                distance[neighbor] = leg.end_minute
-                predecessor[neighbor] = (node, leg.pierre_stops, leg.amelie_stops)
-                unvisited[neighbor] = leg.end_minute
-
-    return None
-
-
-def search_node(pierre: TravelerState, amelie: TravelerState, minute: int, horizon: int) -> tuple:
-    """Identify a node; after the last modifier window, the same pair of states at any minute is one node."""
-    return (pierre, amelie, min(minute, horizon))
-
 
 def breaks_a_rule(pierre: Move, amelie: Move, minute: int) -> bool:
-    """Whether doing both moves in the same minute breaks a rule from docs/design.md, section 3."""
+    """Whether doing both moves in the minute that starts at `minute` breaks a rule from docs/design.md, section 3."""
     if minute == 0 and isinstance(pierre.state, Waiting) and isinstance(amelie.state, Waiting):
         return True   # at least one of them departs at minute 0
     if isinstance(pierre.state, Arrived) != isinstance(amelie.state, Arrived):
@@ -487,6 +389,120 @@ def breaks_a_rule(pierre: Move, amelie: Move, minute: int) -> bool:
 def tunnel_id(tunnel: Tunnel) -> tuple[frozenset[int], str]:
     """The same id for both directions of a tunnel on a line."""
     return (frozenset((tunnel.origin, tunnel.destination)), tunnel.line)
+
+
+# ---------------------------------------------------------------------------
+# Search: one edge of the search graph (a leg)
+# ---------------------------------------------------------------------------
+
+class Leg(Value):
+    """One edge: both travelers make a first move, then keep going while both are riding or transferring."""
+
+    def __init__(
+        self,
+        pierre: TravelerState,
+        amelie: TravelerState,
+        minutes: int,
+        pierre_stops: tuple[Stop, ...],
+        amelie_stops: tuple[Stop, ...],
+    ):
+        self.pierre = pierre       # Pierre's state when the leg ends
+        self.amelie = amelie       # Amélie's state when the leg ends
+        self.minutes = minutes     # the edge's weight
+        self.pierre_stops = pierre_stops
+        self.amelie_stops = amelie_stops
+
+
+def is_forced(state: TravelerState) -> bool:
+    """Inside a tunnel or mid-transfer, a traveler has exactly one move: keep going."""
+    return isinstance(state, (Riding, Transferring))
+
+
+def joint_legs(pierre: TravelerState, amelie: TravelerState, minute: int, metro: MetroInput, graph: Graph) -> list[Leg]:
+    """Return every edge leaving the node where both travelers are at `minute`: one per pair of first moves."""
+    mission = metro.mission
+    legs = []
+    for pierre_move in traveler_moves(pierre, minute, mission.pierre_gate, metro, graph):
+        for amelie_move in traveler_moves(amelie, minute, mission.amelie_gate, metro, graph):
+            leg = follow_leg(pierre_move, amelie_move, minute, metro, graph)
+            if leg is not None:
+                legs.append(leg)
+    return legs
+
+
+def follow_leg(pierre_move: Move, amelie_move: Move, start_minute: int, metro: MetroInput, graph: Graph) -> Leg | None:
+    """Play the leg minute by minute from the two first moves; return None if any minute breaks a rule."""
+    mission = metro.mission
+    pierre_stops, amelie_stops = (), ()
+    minute = start_minute
+    while True:
+        # pierre_move and amelie_move happen during the minute that starts at `minute`.
+        if breaks_a_rule(pierre_move, amelie_move, minute):
+            return None
+        pierre_stops += pierre_move.stops
+        amelie_stops += amelie_move.stops
+        minute += 1
+        if not (is_forced(pierre_move.state) and is_forced(amelie_move.state)):
+            return Leg(pierre_move.state, amelie_move.state, minute - start_minute, pierre_stops, amelie_stops)
+        # Both are forced, so each has exactly one move in the next minute.
+        pierre_move = traveler_moves(pierre_move.state, minute, mission.pierre_gate, metro, graph)[0]
+        amelie_move = traveler_moves(amelie_move.state, minute, mission.amelie_gate, metro, graph)[0]
+
+
+# ---------------------------------------------------------------------------
+# Search: Dijkstra over both travelers
+# ---------------------------------------------------------------------------
+
+def find_plan(metro: MetroInput, graph: Graph) -> Plan | None:
+    """Return the fastest collision-free plan, or None if no plan exists (see docs/design.md, sections 2-3).
+
+    Dijkstra as taught in class. Each node is where both travelers are (see search_node), each edge is a leg
+    weighted by its minutes, and a node's distance is the minute both travelers reach it.
+    """
+    mission = metro.mission
+    if mission.pierre_origin == mission.amelie_origin:
+        return None   # they would share a station at minute 0
+
+    horizon = last_modifier_minute(metro.modifiers)
+    start = search_node(Waiting(mission.pierre_origin), Waiting(mission.amelie_origin), 0, horizon)
+    distance = {start: 0}          # node -> smallest known distance (minutes)
+    predecessor = {start: None}    # node -> (previous node, Pierre's stops, Amélie's stops) of the best leg into it
+    visited = set()
+    # Distances are whole minutes, so the nodes found but not visited yet are grouped by distance. The unvisited
+    # node with the smallest distance is then always in the list of the lowest minute, with no need to scan them all.
+    unvisited_by_minute = {0: [start]}
+
+    minute = 0
+    while unvisited_by_minute:
+        for node in unvisited_by_minute.pop(minute, []):
+            if node in visited:
+                continue   # listed again under a higher, outdated distance
+            visited.add(node)
+            pierre, amelie, _ = node
+            if isinstance(pierre, Arrived):   # the rules only let both arrive together
+                return rebuild_plan(predecessor, node)
+
+            for leg in joint_legs(pierre, amelie, distance[node], metro, graph):
+                new_distance = distance[node] + leg.minutes
+                neighbor = search_node(leg.pierre, leg.amelie, new_distance, horizon)
+                if neighbor in visited:
+                    continue
+                if neighbor not in distance or new_distance < distance[neighbor]:
+                    distance[neighbor] = new_distance
+                    predecessor[neighbor] = (node, leg.pierre_stops, leg.amelie_stops)
+                    unvisited_by_minute.setdefault(new_distance, []).append(neighbor)
+        minute += 1
+
+    return None
+
+
+def search_node(pierre: TravelerState, amelie: TravelerState, minute: int, horizon: int) -> tuple:
+    """Identify a node: both states, plus the minute while a modifier window can still open or close.
+
+    From the last modifier minute on, the same two states always have the same moves and leg lengths, so the minute
+    is capped there and those nodes count once. (The minute-0 rule cannot repeat: both wait only at the start.)
+    """
+    return (pierre, amelie, min(minute, horizon))
 
 
 def rebuild_plan(predecessor: dict, node: tuple) -> Plan:

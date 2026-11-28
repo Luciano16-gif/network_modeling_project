@@ -111,7 +111,7 @@ The `tests/` folder uses only `unittest` and is not part of the three submitted 
 | `tests/laws.py` | The plan checker and a brute force, written independently of the search |
 | `tests/test_engine.py` | Half A: every rule and optimality on 150 random networks |
 | `tests/test_parsing.py` | Parsing and modifier windows |
-| `tests/test_constraints.py` | Standard library only, one program file, the `Plan` contract |
+| `tests/test_constraints.py` | No imports in the program, one program file, the `Plan` contract |
 | `tests/test_validation.py` | Half B, step B1 (skipped until implemented) |
 | `tests/test_report.py` | Half B, step B2 (skipped until implemented) |
 
