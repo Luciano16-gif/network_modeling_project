@@ -56,9 +56,9 @@ Lives in the *Graph* and *Search* sections. Kept here as a description of how it
   - "how many minutes does this tunnel take if entered at minute t?" (`TIEMPO_DOBLE`, ×2 per tunnel)
 - **Done when:** one traveler alone, with no modifiers, reaches every station in the same times a hand calculation gives.
 
-### A3. `find_plan` (joint breadth-first search)
+### A3. `find_plan` (Dijkstra over both travelers)
 
-- **The search:** BFS over pairs of states, one minute per step. It rejects every combination that breaks a rule in `design.md`, section 3:
+- **The search:** Dijkstra over pairs of states (`design.md`, section 2). Each edge is a leg: both travelers make a first move, then keep going while both are inside a tunnel or mid-transfer. It is weighted by its minutes. It rejects every leg that breaks a rule in `design.md`, section 3:
   - both travelers at the same station in the same minute
   - both travelers in the same tunnel in the same minute
   - waiting anywhere other than the origin
@@ -111,7 +111,7 @@ The `tests/` folder uses only `unittest` and is not part of the three submitted 
 | `tests/laws.py` | The plan checker and a brute force, written independently of the search |
 | `tests/test_engine.py` | Half A: every rule and optimality on 150 random networks |
 | `tests/test_parsing.py` | Parsing and modifier windows |
-| `tests/test_constraints.py` | Standard library only, one program file, the `Plan` contract |
+| `tests/test_constraints.py` | No imports in the program, one program file, the `Plan` contract |
 | `tests/test_validation.py` | Half B, step B1 (skipped until implemented) |
 | `tests/test_report.py` | Half B, step B2 (skipped until implemented) |
 
