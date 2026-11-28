@@ -56,9 +56,9 @@ Lives in the *Graph* and *Search* sections. Kept here as a description of how it
   - "how many minutes does this tunnel take if entered at minute t?" (`TIEMPO_DOBLE`, ×2 per tunnel)
 - **Done when:** one traveler alone, with no modifiers, reaches every station in the same times a hand calculation gives.
 
-### A3. `find_plan` (joint breadth-first search)
+### A3. `find_plan` (Dijkstra over both travelers)
 
-- **The search:** BFS over pairs of states, one minute per step. It rejects every combination that breaks a rule in `design.md`, section 3:
+- **The search:** Dijkstra over pairs of states (`design.md`, section 2). Each edge is a leg that lasts until one traveler must decide again, weighted by its minutes. It rejects every leg that breaks a rule in `design.md`, section 3:
   - both travelers at the same station in the same minute
   - both travelers in the same tunnel in the same minute
   - waiting anywhere other than the origin

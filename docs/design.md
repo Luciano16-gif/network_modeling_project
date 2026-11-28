@@ -22,11 +22,16 @@ Why not the other four representations taught in class:
 | Lista de lados | Finding a station's exits means scanning the whole edge list. |
 | Star (forward star) | Same O(V + E) and direct access to exits, but its offset arrays add bookkeeping that is harder to explain. The closest alternative. |
 
-## 2. Algorithm: joint breadth-first search over both travelers (Decided)
+## 2. Algorithm: Dijkstra over both travelers (Decided)
 
-The search state holds **both** travelers at once: where each one is (waiting at their origin, at a station on a line, transferring, or partway through a tunnel). Each step advances the clock by one minute. From each state, the search tries every combination of the two travelers' next moves, discards the combinations that break a rule, and records predecessors. The first state where both reach their gates in the same minute is the optimal plan, and both routes are rebuilt from the predecessors.
+The professor asked for **Dijkstra** (Unit 3). It runs on a state graph generated as the search goes, while the metro itself stays in the adjacency list:
 
-This is **breadth-first search** (Unit 2) on a state graph generated as the search goes. It is also exactly what **Dijkstra** (Unit 3) does when every step costs the same (one minute). The metro itself stays in the adjacency list.
+- **Node:** where **both** travelers are at once (waiting at their origin, at a station on a line, transferring, or partway through a tunnel), plus the minute while a modifier window can still open or close.
+- **Edge (a "leg"):** both travelers move together until one of them has a choice again: a traveler at a station or waiting at their origin chooses, one inside a tunnel or mid-transfer just keeps going. Every combination of the two travelers' choices is a separate edge. The rules of section 3 are checked minute by minute along the leg, and a leg that breaks one is discarded.
+- **Weight:** the minutes the leg lasts. A node's distance is the minute both travelers reach it.
+- **Dijkstra, as in `Unit_3/Dijkstra_Dirigido.xlsx`:** a table of distance, predecessor and visited. Each round visits the unvisited node with the smallest distance and updates its neighbors. The first visited node where both have arrived is the optimal plan, and both routes are rebuilt from the predecessors.
+
+Nodes are discovered as the search goes instead of listed up front with infinite distance, because the state graph is too big to build in advance.
 
 ### Why not plan one traveler, then the other?
 
@@ -44,7 +49,7 @@ In the benchmark below, planning one traveler at a time found no plan on 11–29
 
 Conflict-Based Search (the professional standard for multi-agent routing) was considered and rejected. It targets many agents on large maps, the simultaneous-arrival rule complicates it, it can blow up when the routes cross a lot, and it was not taught.
 
-### Benchmark (throwaway Python prototype, random metro-like networks)
+### Benchmark (throwaway Python prototype of the earlier minute-by-minute search, random metro-like networks)
 
 | Stations (tunnels) | Typical | Slowest observed | Proving no solution exists | Peak memory |
 | --- | --- | --- | --- | --- |
