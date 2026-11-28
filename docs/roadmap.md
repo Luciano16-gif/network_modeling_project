@@ -58,7 +58,7 @@ Lives in the *Graph* and *Search* sections. Kept here as a description of how it
 
 ### A3. `find_plan` (Dijkstra over both travelers)
 
-- **The search:** Dijkstra over pairs of states (`design.md`, section 2). Each edge is a leg that lasts until one traveler must decide again, weighted by its minutes. It rejects every leg that breaks a rule in `design.md`, section 3:
+- **The search:** Dijkstra over pairs of states (`design.md`, section 2). Each edge is a leg: both travelers make a first move, then keep going while both are inside a tunnel or mid-transfer. It is weighted by its minutes. It rejects every leg that breaks a rule in `design.md`, section 3:
   - both travelers at the same station in the same minute
   - both travelers in the same tunnel in the same minute
   - waiting anywhere other than the origin

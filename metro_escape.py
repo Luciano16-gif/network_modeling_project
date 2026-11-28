@@ -470,13 +470,15 @@ def find_plan(metro: MetroInput, graph: Graph) -> Plan | None:
     visited = set()
     # Distances are whole minutes, so the nodes found but not visited yet are grouped by distance. The unvisited
     # node with the smallest distance is then always in the list of the lowest minute, with no need to scan them all.
+    # Every leg lasts at least one minute, so visiting a minute's nodes only adds nodes to later minutes.
     unvisited_by_minute = {0: [start]}
 
     minute = 0
     while unvisited_by_minute:
+        # Every node visited here has distance[node] == minute; a minute with no nodes gives an empty list.
         for node in unvisited_by_minute.pop(minute, []):
             if node in visited:
-                continue   # listed again under a higher, outdated distance
+                continue   # an outdated entry: a shorter way was found later, so the node was already visited
             visited.add(node)
             pierre, amelie, _ = node
             if isinstance(pierre, Arrived):   # the rules only let both arrive together
@@ -500,7 +502,8 @@ def search_node(pierre: TravelerState, amelie: TravelerState, minute: int, horiz
     """Identify a node: both states, plus the minute while a modifier window can still open or close.
 
     From the last modifier minute on, the same two states always have the same moves and leg lengths, so the minute
-    is capped there and those nodes count once. (The minute-0 rule cannot repeat: both wait only at the start.)
+    is capped there and those nodes count once. (The minute-0 rule is not affected: the leg where both keep waiting
+    at minute 0 is rejected, so "both waiting" is only ever the start node.)
     """
     return (pierre, amelie, min(minute, horizon))
 

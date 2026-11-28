@@ -34,7 +34,7 @@ The professor asked for **Dijkstra** (Unit 3). It runs on a state graph generate
 Two practical differences from the spreadsheet, neither of which changes the algorithm:
 
 - Nodes are discovered as the search goes instead of listed up front with infinite distance, because the state graph is too big to build in advance.
-- Distances are whole minutes, so the unvisited nodes are kept in one list per minute. The one with the smallest distance is always in the lowest minute's list, so the search never scans every unvisited node to find it. Scanning made the search quadratic: a 15-station input with no plan went from minutes to under 30 seconds.
+- Distances are whole minutes, so the unvisited nodes are kept in one list per minute. The one with the smallest distance is always in the lowest minute's list, so the search never scans every unvisited node to find it. Scanning them all every round made the search quadratic; grouping by minute took a 15-station input with no plan from several minutes to under 30 seconds.
 
 ### Why not plan one traveler, then the other?
 
@@ -62,7 +62,7 @@ Conflict-Based Search (the professional standard for multi-agent routing) was co
 | 200 | 3 s | 5 s | 9 s | ~400 MB |
 | 300 (~680) | 3 s | 24 s | not measured | ~900 MB |
 
-The current program is slower than this prototype (roughly 1.5–3×) because its data types are plain classes instead of tuples. Inputs with a plan, like the spec's example (15 stations, 22 tunnels), still take a fraction of a second. The slow case is proving that **no** plan exists when modifier windows end late: every minute until the last window ends multiplies the nodes, and one such 15-station input takes about 30 seconds. Keep the submitted `input.txt` solvable.
+The table does not cover the slow case described below. The current program is slower than this prototype (roughly 1.5–3×) because its data types are plain classes instead of tuples and each leg is replayed minute by minute. Inputs with a plan, like the spec's example (15 stations, 22 tunnels), still take a fraction of a second. The slow case is proving that **no** plan exists when modifier windows end late: every minute until the last window ends multiplies the nodes, and one such 15-station input takes about 30 seconds. Keep the submitted `input.txt` solvable.
 
 ## 3. Rules the search enforces (Decided)
 
