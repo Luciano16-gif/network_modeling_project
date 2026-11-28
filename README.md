@@ -6,7 +6,7 @@ El enunciado está en [`docs/enunciado-proyecto.md`](docs/enunciado-proyecto.md)
 
 ## Cómo ejecutarlo
 
-Requiere Python 3.10 o superior y no usa librerías externas.
+Requiere Python 3.10 o superior y no importa ninguna librería (ni siquiera la estándar).
 
 ```
 python metro_escape.py

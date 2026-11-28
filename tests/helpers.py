@@ -14,3 +14,8 @@ def write_temp_input(text: str) -> Path:
     with file:
         file.write(text)
     return Path(file.name)
+
+
+def replaced(value, **changes):
+    """A copy of a metro_escape data value with some fields changed."""
+    return type(value)(**{**vars(value), **changes})
